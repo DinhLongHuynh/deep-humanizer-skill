@@ -1,0 +1,11 @@
+# Voice profiles, personal reference banks and calibration caches contain your own writing.
+# Keep them out of this (public) repository.
+profiles/
+banks/
+calib_cache/
+.deep-humanizer/
+
+# Python and OS files
+__pycache__/
+*.pyc
+.DS_Store

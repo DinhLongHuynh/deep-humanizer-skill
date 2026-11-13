@@ -32,6 +32,7 @@ Usage
   python check.py draft.md --fast                           # surface + stylometry + LM w/o Binoculars
   python check.py v2.md --baseline v1.md --restructure --cuts cuts.txt   # after a paragraph rewrite
   python check.py draft.md --controls human_controls/       # read detectors against same-register human texts
+  python check.py draft.md --profile blog                   # + voice match to the writer's profile (build_profile.py)
 Outputs a markdown report (stdout or --md) and full JSON (--json).
 """
 from __future__ import annotations
@@ -439,12 +440,23 @@ def markdown(res: dict, ev: dict, base: dict | None, guard: dict | None, depth: 
     if res.get("structure"):
         import structure_scan
         L += structure_scan.markdown(res["structure"])
-    if ev.get("targets"):
+    fix = [t for t in ev.get("targets", []) if not t.get("voice_consistent")]
+    own = [t for t in ev.get("targets", []) if t.get("voice_consistent")]
+    if fix:
         L += ["## What to fix next (most discriminative features on the AI side of the human band)", ""]
-        for t in ev["targets"]:
+        for t in fix:
             L.append(f"- `{t['feature']}` = {_fmt(t['value'])} (human median {_fmt(t['human_median'])}, AI median "
                      f"{_fmt(t['ai_median'])}; AI-side pct {t['ai_side_percentile']}, AUROC {t['auroc']:.2f}). {t['tactic']}")
         L.append("")
+    if own:
+        L += ["## Generic targets that match the writer's own style (keep; held-out detectors may still react to them)", ""]
+        for t in own:
+            L.append(f"- `{t['feature']}` = {_fmt(t['value'])}: the writer's own median is {_fmt(t['author_median'])} "
+                     f"(AI-side pct {t['author_ai_side_percentile']} on the generic human band). Not an edit target.")
+        L.append("")
+    if ev.get("voice"):
+        import voice_profile
+        L += voice_profile.markdown(ev["voice"])
     sp = res.get("stylometry", {}).get("spans") or {}
     if sp.get("sentences"):
         L += ["## Syntax hotspots (Pass B targets: register markers by sentence)", "",
@@ -477,7 +489,7 @@ def markdown(res: dict, ev: dict, base: dict | None, guard: dict | None, depth: 
               f"AI-vocabulary hits: {json.dumps(dict(list(srf.get('ai_vocab_hits', {}).items())[:15]))}",
               f"Dashes: {srf['counts']['em_or_spaced_dash']}, one-line closers: {srf['counts']['one_line_closers']}", ""]
     au = res.get("embedding", {}).get("author_style")
-    if au:
+    if au and not ev.get("voice"):
         L += ["## Voice match to author samples", "", "```", json.dumps(au, indent=1), "```", ""]
     if base is not None:
         L += ["## Change from baseline", "", "| feature | baseline | now | toward human? |", "|---|---|---|---|"]
@@ -504,6 +516,8 @@ def main():
     ap.add_argument("--baseline", help="original text: adds per-feature deltas and the meaning guard")
     ap.add_argument("--reference", default=str(DEFAULT_REFERENCE), help="calibrated reference bank directory")
     ap.add_argument("--author", help="directory with >= 3 samples of the author's own writing")
+    ap.add_argument("--profile", help="writer voice profile: directory, name under ~/.deep-humanizer/profiles, or voice.md "
+                                      "path (default: $DEEP_HUMANIZER_PROFILE). Guides edits; never changes the verdict")
     ap.add_argument("--layers", default="surface,stylometry,lm,embedding,detectors")
     ap.add_argument("--fast", action="store_true", help="surface+stylometry+lm without Binoculars")
     ap.add_argument("--open-detectors", default=None, help="comma list (default: tabularisai,desklib,fakespot,tropa_mini)")
@@ -527,7 +541,13 @@ def main():
         import detectors
         od = list(detectors.FINAL_OPEN)
     ref = Path(a.reference) if a.reference else None
-    res = extract_all(text, layers, str(ref) if ref and embed_geometry.has_bank(ref) else "none", a.author,
+    prof = None
+    import os
+    if a.profile or os.environ.get("DEEP_HUMANIZER_PROFILE"):
+        import voice_profile
+        prof = voice_profile.load_profile(a.profile)
+    author = a.author or (prof.get("samples_dir") if prof else None)
+    res = extract_all(text, layers, str(ref) if ref and embed_geometry.has_bank(ref) else "none", author,
                       performer=not a.fast, open_detectors=od)
     res["_text"] = text
     if a.external:
@@ -538,6 +558,11 @@ def main():
     if "verdict" in ev:
         ctrl = score_controls(a.controls, od) if a.controls and "detectors" in layers else None
         detector_gate(res, ev, ctrl)
+    if prof is not None:
+        import voice_profile
+        if "verdict" in ev and (ref / "feature_stats.json").exists():
+            voice_profile.annotate_targets(ev, prof, json.loads((ref / "feature_stats.json").read_text()), _percentile)
+        ev["voice"] = voice_profile.compare(text, res, prof)
     if not a.no_structure:
         import structure_scan
         gate = ev.get("detector_gate", {})

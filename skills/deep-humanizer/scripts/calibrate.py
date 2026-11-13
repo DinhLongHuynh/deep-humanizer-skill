@@ -141,7 +141,12 @@ def main():
     ap.add_argument("--open-detectors", default=None)
     ap.add_argument("--diagnostic-auroc", type=float, default=0.7)
     ap.add_argument("--refresh", default="", help="recompute these layers for cached docs (e.g. surface,stylometry)")
+    ap.add_argument("--overwrite-default", action="store_true",
+                    help="allow writing into the shipped assets/reference_default bank")
     a = ap.parse_args()
+    if Path(a.out).expanduser().resolve() == (ASSETS / "reference_default").resolve() and not a.overwrite_default:
+        raise SystemExit("--out points at the shipped default bank (assets/reference_default). Give your own bank its "
+                         "own directory, e.g. --out ~/.deep-humanizer/banks/my_register, or pass --overwrite-default.")
 
     rows = load_jsonl(a.corpus)
     layers = ("surface", "stylometry", "lm", "embedding") + (() if a.no_detectors else ("detectors",))
