@@ -1,0 +1,14 @@
+{
+  "sent_emb": "sentence-transformers/all-mpnet-base-v2",
+  "observer": "Qwen/Qwen2.5-1.5B",
+  "performer": "Qwen/Qwen2.5-1.5B-Instruct",
+  "encoder": "FacebookAI/roberta-base",
+  "n_human": 120,
+  "n_ai": 120,
+  "registers": [
+    "academic",
+    "fiction",
+    "news"
+  ],
+  "corpus": "../../corpus/calib_corpus.jsonl"
+}
