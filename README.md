@@ -1,10 +1,10 @@
-# deep-humanizer
+# deep-humanizer-skill
 
-An agent skill that edits LLM-written prose until it is closer to human writing at the levels readers and detectors actually measure, and then checks whether it got there.
+An agent skill that edits LLM-written text until it is close to human writing. It also check when detecting tools.
 
 Most "humanizers" swap words and strip em dashes. The differences between instruction-tuned LLM prose and human prose sit much deeper: in grammatical register, in how information is spread across tokens, in how paragraphs are built, and in where a document lands in embedding space. This skill gives an agent a research-based editing workflow for all of these layers, plus a local toolkit that measures each one against a calibrated human reference and refuses to call a text finished on a single score.
 
-The skill follows the open [Agent Skills](https://agentskills.io) format (a folder with a `SKILL.md`), so it works in Claude Code, Claude.ai, Codex, Cursor, Gemini CLI, GitHub Copilot and other agents that read `SKILL.md`.
+The skill works in Claude Code, Claude.ai, Codex, Cursor, Gemini CLI, GitHub Copilot and other agents that read `SKILL.md`.
 
 ## What it does
 
@@ -54,18 +54,20 @@ The folder must keep the name `deep-humanizer`, with `SKILL.md` directly inside 
 **Any agent, with the skills CLI.** It detects the agents on your machine and links the skill into each one:
 
 ```bash
-npx skills add YOUR_GITHUB_USER/deep-humanizer-skill --skill deep-humanizer -g
+npx skills add DinhLongHuynh/deep-humanizer-skill --skill deep-humanizer -g
 ```
 
 **With the GitHub CLI** (`gh skill`, recent versions):
 
 ```bash
-gh skill install YOUR_GITHUB_USER/deep-humanizer-skill deep-humanizer --scope user
+gh skill install DinhLongHuynh/deep-humanizer-skill deep-humanizer --scope user
 ```
 
-**With the install script** (after `git clone`):
+**With the install script:**
 
 ```bash
+git clone https://github.com/DinhLongHuynh/deep-humanizer-skill.git
+cd deep-humanizer-skill
 ./install.sh                # Claude Code (~/.claude/skills) and the shared ~/.agents/skills folder
 ./install.sh claude         # Claude Code only
 ./install.sh agents         # ~/.agents/skills (Codex, Cursor, Gemini CLI, GitHub Copilot and others)
