@@ -144,91 +144,119 @@ Commercial adapters read their keys from environment variables (`GPTZERO_API_KEY
 
 ## Tailor it to your writing style
 
-Out of the box, the skill edits toward a *generic* human band: 120 texts written before ChatGPT, in three registers. Your own writing may sit somewhere else. Dense academic prose, a blog voice with dashes and short paragraphs, or plain non-native English can all look "AI-like" against a generic reference and to detectors. Tailoring tells the agent which band is yours, so it edits toward your voice and stops "fixing" habits that are genuinely yours.
+Out of the box, the skill edits toward a *generic* human band: 120 texts written before ChatGPT, in three registers. Your writing may sit somewhere else. Dense academic prose, a blog voice with dashes, or plain non-native English can all look "AI-like" against that band. A **voice profile** tells the agent what your own writing looks like, so it edits toward your voice and leaves your real habits alone.
 
-There are three levels, and each builds on the one before:
+### In short
 
-| Level | What you provide | What it changes | Requirements |
-|---|---|---|---|
-| 1. Voice card | A `voice.md` you write by hand | The agent follows your rules; the check round flags your banned phrases and stops flagging AI-list words you really use | Nothing for the agent; the toolkit for the check round |
-| 2. Measured profile | 3 or more samples of your writing (1,500+ words) | Your own range for 26 habits, "voice gaps" in every report, spelling convention, sentence openers, style-embedding match | The toolkit (spaCy only for the build; about 10 s) |
-| 3. Personal reference bank | 30-100+ of your texts and LLM texts on the same topics | The calibrated verdict itself is measured against your writing instead of the generic bank | The full toolkit; a few hours on a laptop CPU |
-
-What a profile never changes: the calibrated verdict (unless you build a Level 3 bank), the held-out detector gate and the meaning gate. Rules in `voice.md` override the skill's generic style advice (dashes, contractions, vocabulary, sentence length, three-item lists). They never override the rules against invented facts, lost claims or character tricks.
-
-### Choosing your samples
-
-- **Written by you without AI help.** Texts from before 2023 are safest, or drafts you know are yours. A sample polished by an LLM teaches the profile the LLM's habits.
-- **One register per profile.** Your papers, blog posts and emails have different bands; build `papers`, `blog` and `email` separately. In our test (below), the author's one reflective post, checked against a profile of their technical posts, showed three voice gaps (more "we", hedges and exclamations): real differences of register, not of authorship.
-- **Prose only.** Plain text or Markdown, one text per file. Remove quotations from other people, code, tables, reference lists, signatures and boilerplate.
-- **Enough text.** At least 3 files and 1,500 words; 5,000+ words gives tighter ranges. Long texts are cut into chunks of about 300 words, so a few long texts are fine.
-
-### Level 1: write a voice card
-
-Copy the template into a profile folder and fill it in:
+You need 3 or more texts you wrote yourself (1,500+ words in total) and the Python toolkit.
 
 ```bash
-mkdir -p ~/.deep-humanizer/profiles/blog
-cp skills/deep-humanizer/assets/voice_template.md ~/.deep-humanizer/profiles/blog/voice.md
+S=skills/deep-humanizer/scripts
+
+# 1. Measure your writing (about 10 s; creates ~/.deep-humanizer/profiles/blog/)
+python $S/build_profile.py ~/my_writing/blog/ --name blog --register "Blog posts: first person, short paragraphs"
+
+# 2. Open ~/.deep-humanizer/profiles/blog/voice.md and fill in the sections at the top
+
+# 3. Ask your agent: "Humanize this with my voice profile blog"
+#    or check a draft yourself:
+python $S/check.py draft.md --profile blog
 ```
+
+The rest of this section explains each step.
+
+### What a profile is
+
+A profile is a folder, by default `~/.deep-humanizer/profiles/<name>/`, outside this repository. It holds three things:
+
+| File | What it is | Who writes it |
+|---|---|---|
+| `voice.md` | Your style card: your rules, habits, phrases you avoid, words that are yours. The agent reads it in full before editing | You write the top sections; `build_profile.py` fills a "measured" block at the bottom |
+| `profile.json` | Your own range for every surface and syntax feature, measured on about 300-word chunks of your samples. 26 of them (sentence length, paragraph size, "I"/"we", contractions, dashes, -ing clauses, ...) are compared as habits | `build_profile.py` |
+| `samples/` | A copy of your samples, used to compare a draft's overall style with yours | `build_profile.py` |
+
+Build one profile per register. Your papers, blog posts and emails have different habits, so make `papers`, `blog` and `email` separately.
+
+### Step 1: choose your samples
+
+- **Written by you without AI help.** Texts from before 2023 are safest. A sample polished by an LLM teaches the profile the LLM's habits.
+- **One register.** Everything in the folder should be the kind of text the profile is for.
+- **Prose only.** Plain text or Markdown, one text per file. Remove other people's quotations, code, tables, reference lists, signatures and boilerplate.
+- **Enough text.** At least 3 files and 1,500 words in total. 5,000+ words gives tighter ranges. A few long texts are fine, because they are cut into chunks.
+
+### Step 2: build the profile
+
+```bash
+python $S/build_profile.py ~/my_writing/blog/ --name blog --register "Blog posts: first person, short paragraphs"
+```
+
+This creates the folder, measures your samples, copies them into `samples/`, and creates `voice.md` from `assets/voice_template.md`. The new `voice.md` already lists the AI-list words you use under "Words that are mine". Its measured block at the bottom summarises your habits, including the LLM-favourite openers ("Moreover", "Furthermore", ...) that never appear in your samples.
+
+Useful options:
+
+- `--out DIR`: put the profile somewhere else.
+- `--no-copy`: leave the samples where they are instead of copying them.
+- `--lm`: also measure the probability layer (slower).
+- `--force`: replace the samples of an existing profile with a different set. Without it, the script refuses to mix two sets.
+
+You can re-run it whenever you add samples. It rewrites `profile.json` and only the measured block of `voice.md`, so your own edits stay. If your files separate paragraphs with single line breaks (common when pasting from web pages), it treats each line as a paragraph and tells you.
+
+### Step 3: fill in `voice.md`
+
+Edit the sections above the measured block. Leave out anything you have nothing to say about.
 
 | Section | What to write |
 |---|---|
 | Registers I write in | One line per register: reader, "I" or "we", formality, typical length |
 | Habits to keep | Things you do on purpose ("I open with a question", "colons rather than dashes") |
 | Rules that override the generic skill | Where you differ from the skill's defaults ("I use em dashes", "British spelling", "no contractions in papers") |
-| Phrases I avoid | One phrase per bullet. The check round flags each one in a draft |
-| Words that are mine | AI-list words you genuinely use. The check round stops flagging them |
+| Phrases I avoid | One phrase per bullet. The check round reports each one it finds in a draft |
+| Words that are mine | AI-list words you really use. The check round marks them "yours, keep" and the agent keeps them. Delete any pre-filled word you don't want |
 | Example sentences in my voice | 3-5 sentences you wrote and like. The agent copies their rhythm and stance, never their content |
 
-Keep the two headings "Phrases I avoid" and "Words that are mine" exactly as they are; the scripts read their bullet lists. Bullets that start with "(" are placeholders and are ignored.
+Two rules for this file:
 
-### Level 2: measure your writing
+- Keep the headings "Phrases I avoid" and "Words that are mine" exactly as written, because the scripts read their bullet lists. Bullets that start with "(" are placeholders and are ignored.
+- Your rules override the skill's generic style advice (dashes, contractions, vocabulary, sentence length, three-item lists). They never override the rules against invented facts, lost claims or character tricks.
 
-```bash
-S=skills/deep-humanizer/scripts
-python $S/build_profile.py ~/my_writing/blog/ --name blog --register "Blog posts: first person, short paragraphs"
-```
+### Step 4: use the profile
 
-This writes `~/.deep-humanizer/profiles/blog/` with three things:
+**With an agent.** Name the profile in your request: "Humanize this with my voice profile `blog`." A bare name is looked up in `~/.deep-humanizer/profiles/`. A path to a profile folder or to a `voice.md` also works.
 
-- **`profile.json`**: your range for each surface and syntax feature, measured on about 300-word chunks of your samples, plus countable habits (spelling, dash glyphs, "I" and "we", sentence openers, paragraph size, function words).
-- **`voice.md`**: created from the template on the first run, with the AI-list words you use pre-filled under "Words that are mine". The bottom block summarises your measured habits, including the LLM-favourite openers ("Moreover", "Furthermore", ...) that never appear in your samples. Edit everything above that block.
-- **`samples/`**: a copy of your samples, used for the style-embedding match. Pass `--no-copy` to keep them where they are.
+**As a default.** Add `export DEEP_HUMANIZER_PROFILE=blog` to your shell profile. `check.py` and `voice_profile.py` then use it without `--profile`, and the report names the profile it used. If the name is wrong, the scripts print a warning and run without a profile.
 
-Re-running `build_profile.py` replaces only the measured block in `voice.md`, so your edits are kept. It refuses to mix a different set of samples into an existing profile unless you pass `--force`. `--lm` also measures the probability layer on your samples (slower). If your files separate paragraphs with single line breaks (common when pasting from web pages), the builder treats each sentence-final line as a paragraph and says so; hard-wrapped Markdown is left alone.
-
-Then check drafts against it:
+**From the command line.**
 
 ```bash
-python $S/voice_profile.py draft.md --profile blog   # voice-only check: surface and syntax, no large models
-python $S/check.py draft.md --profile blog           # full check round plus the voice section
+python $S/voice_profile.py draft.md --profile blog   # quick voice-only check: surface and syntax, no large models
+python $S/check.py draft.md --profile blog           # full check round plus a voice section
 ```
 
-With a profile, the report adds:
+**Other locations.** `DEEP_HUMANIZER_HOME=/path` moves the root folder from `~/.deep-humanizer`. For Claude.ai and other sandboxed agents that cannot read your home folder, put the profile inside the skill folder before zipping it (for example `skills/deep-humanizer/profiles/blog/`) and name that path in your request. `profiles/` is git-ignored.
 
-- **Voice gaps**: habits where the draft is outside your own range, with your median and usual range, and what to do ("Vary sentence length the way you do").
-- **Generic targets that match your own style**: features that look AI-like against the generic band, but where your own samples sit too. These are no longer edit targets. If a detector still flags them, the agent tells you instead of quietly erasing your style.
+### What the profile adds to the report
+
+With a profile, the check report gets a "Voice match" section and splits the generic targets in two:
+
+- **Voice gaps**: habits where the draft is outside your own range, with your median, your usual range, and what to do ("Vary sentence length the way you do"). The agent edits toward your median.
+- **Generic targets that match your own style**: features that look AI-like against the generic band, but where your own samples sit too. They are no longer edit targets. If a detector still flags the text, the agent tells you instead of quietly erasing your style.
 - **Your phrase lists**: phrases you avoid that appear in the draft, and AI-list words split into "yours, keep" and "not yours".
-- **Spelling, openers, dashes**: American forms in a British writer's draft (or the reverse), sentence openers that never appear in your samples, and em dashes where you use spaced en dashes.
-- **Style embedding and function words**: how close the draft's overall voice is to your samples, compared with how close your samples are to each other.
+- **Spelling, openers and dashes**: American forms in a British writer's draft (or the reverse), LLM-favourite openers that never appear in your samples (needs 40+ sentences of samples), and em dashes where you use spaced en dashes or hyphens.
+- **Overall style** (full `check.py` only, not `--fast` or `voice_profile.py`): how close the draft is to your samples in a style embedding, compared with how close your samples are to each other, and a function-word distance (needs 5+ chunks, about 1,500 words).
 
-We tested the comparison on six of the author's own blog posts, building a profile from five and checking the sixth each time. The held-out posts averaged 0.67 voice gaps (four of six had none; at most three). Ten texts from four LLMs, checked against the full profile, averaged 2.8 (range 1-7; none had zero), mostly "X and Y" pairs, trailing "-ing" clauses, AI-list words and long sentences. It is a small test, and the two groups overlap: the profile guides edits, it is not a detector.
+What a profile does **not** change: the calibrated verdict (CLEAN, BORDERLINE, FLAGGED), the held-out detector gate and the meaning gate. It changes what the agent edits, not how the draft is scored. To change the scoring, build a personal reference bank (below).
 
-### Telling your agent to use your profile
+A profile with only a hand-written `voice.md` (no samples, no `build_profile.py`) also works: the agent follows your rules and the report checks your two phrase lists, but there are no voice gaps or style comparisons. To start one, copy `assets/voice_template.md` to `~/.deep-humanizer/profiles/<name>/voice.md`.
 
-- **In the request**: "Humanize this with my voice profile `blog`." A bare name is looked up in `~/.deep-humanizer/profiles/`; a path to any folder or to a `voice.md` also works.
-- **As a default**: `export DEEP_HUMANIZER_PROFILE=blog` in your shell profile. `check.py` and `voice_profile.py` then use it without `--profile`, and the report names the profile it used. A wrong value only prints a warning.
-- **Different location**: `DEEP_HUMANIZER_HOME=/path` moves the root from `~/.deep-humanizer`.
-- **Claude.ai and other sandboxed agents** that cannot read your home folder: put the profile inside the skill folder before zipping it (for example `skills/deep-humanizer/profiles/blog/voice.md`) and name that path in your request. `profiles/` is git-ignored, so it will not be committed.
+**How well it works.** We built a profile from five of the author's six blog posts and checked the sixth, for each of the six posts. The held-out posts averaged 0.67 voice gaps (four of six had none, at most three). Ten texts from four LLMs, checked against the full profile, averaged 2.8 (range 1-7, none had zero), mostly "X and Y" pairs, trailing "-ing" clauses, AI-list words and long sentences. One reflective post, checked against a profile of technical posts, showed three gaps (more "we", hedges and exclamations): a difference of register, not of authorship. It is a small test and the groups overlap, so treat the profile as a guide for edits, not as a detector.
 
-### Level 3: calibrate on your own writing
+### Optional: a personal reference bank
 
-A personal bank replaces the generic human class with your texts, so the verdict itself measures "how far from me" instead of "how far from an average human".
+A profile guides the edits, while the verdict is still measured against the generic bank. A personal reference bank replaces the generic human texts with yours, so the verdict itself measures "how far from me" instead of "how far from an average human". It needs more material (30-100+ of your texts) and the full toolkit, and calibration takes a few hours on a laptop CPU.
 
 1. Put your texts in one folder, one per file (`my_writing/`).
-2. For each text, ask an LLM for a text on the same topic and of the same length, for example "Write a blog post of about 800 words on: <title or one-line summary>". Use the model you usually draft with, do not ask it to imitate your style (that blurs the AI class), and save the result under the same file name in `ai_versions/` (`post1.md` or `post1_ai.md`).
-3. Build the corpus and the bank:
+2. For each text, ask an LLM for a text on the same topic and of the same length, for example "Write a blog post of about 800 words on: <title or one-line summary>". Use the model you usually draft with. Do not ask it to imitate your style, because that blurs the AI class. Save each result under the same file name in `ai_versions/` (`post1.md`, or `post1_ai.md`).
+3. Build the corpus and the bank, then check against it:
 
 ```bash
 python $S/make_corpus.py --human my_writing/ --ai ai_versions/ --register blog --out my_corpus.jsonl
@@ -236,13 +264,13 @@ python $S/calibrate.py my_corpus.jsonl --out ~/.deep-humanizer/banks/blog --cach
 python $S/check.py draft.md --reference ~/.deep-humanizer/banks/blog --profile blog
 ```
 
-`make_corpus.py` pairs files by name, so a topic never lands in both training and test folds, and cuts long texts into 150-450-word chunks (the range of the default bank). It warns when a class has fewer than 30 documents; about 100 per class gives stable results. Calibration runs every layer on every document (about 30-60 s each on a laptop CPU); `--cache` lets an interrupted run resume. `calibrate.py` refuses to write into the shipped default bank unless you pass `--overwrite-default`.
+`make_corpus.py` pairs files by name, so a topic never lands in both training and test folds, and it cuts long texts into chunks of roughly 150-450 words, the length range of the default bank. It warns when a class has fewer than 30 documents; about 100 per class gives stable results. `calibrate.py` runs every layer on every document (about 30-60 s each on a laptop CPU), and `--cache` lets an interrupted run resume. It refuses to overwrite the shipped default bank unless you pass `--overwrite-default`.
 
 The same steps build a bank for a register the default bank does not cover: use texts of that register written before 2023 as the human class.
 
 ### Privacy
 
-Profiles, banks and caches contain your writing. By default they live in `~/.deep-humanizer/`, outside this repository; the repository's `.gitignore` also excludes `profiles/`, `banks/` and calibration caches, and `build_profile.py` warns if you put a profile inside a git repository. Everything above runs locally. `--external` sends only the draft being checked to the detector you name, never your samples or profile.
+Profiles, banks and caches contain your writing. By default they live in `~/.deep-humanizer/`, outside this repository. The repository's `.gitignore` also excludes `profiles/`, `banks/` and calibration caches, and `build_profile.py` warns if you put a profile inside a git repository. Everything in this section runs locally. `--external` sends only the draft being checked to the detector you name, never your samples or profile.
 
 ## Responsible use
 
