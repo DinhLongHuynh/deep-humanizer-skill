@@ -1,21 +1,23 @@
 # deep-humanizer-skill
 
-An agent skill that edits LLM-written text until it is close to human writing. It also check when detecting tools.
+This is an agent skill that edits LLM-generated text until it reads close to human writing. It works across several layers, from rewriting the prose to checking where the text falls in an embedding distribution (see details below).
 
-Most "humanizers" swap words and strip em dashes. The differences between instruction-tuned LLM prose and human prose sit much deeper: in grammatical register, in how information is spread across tokens, in how paragraphs are built, and in where a document lands in embedding space. This skill gives an agent a research-based editing workflow for all of these layers, plus a local toolkit that measures each one against a calibrated human reference and refuses to call a text finished on a single score.
+Most humanizer tools and skills stop at surface edits, such as swapping words and stripping em dashes. The differences between instruction-tuned LLM prose and human prose sit deeper, beneath the grammar: in how information is distributed across a text, how paragraphs are built, and where a document lands in embedding space.
 
-The skill works in Claude Code, Claude.ai, Codex, Cursor, Gemini CLI, GitHub Copilot and other agents that read `SKILL.md`.
+This skill gives an agent an editing workflow for each of these layers, plus a local toolkit that measures every layer against a calibrated human reference.
 
-## What it does
+The skill works in Claude Code, Claude.ai, Codex, Cursor, Gemini CLI, GitHub Copilot and any other agent that reads SKILL.md.
 
-The agent works in a loop: **diagnose → edit in passes → meaning gate → check round → held-out confirmation → report**.
+## How this skill operate?
+
+The SKILL instructs agents to work in a loop: **diagnose → edit in passes → meaning gate → check round → held-out confirmation → report**.
 
 | Layer | What differs between LLM and human prose | Measured by |
 |---|---|---|
-| L1 Surface | Over-used vocabulary (669 sourced items), stock constructions, dash habits, chat residue | `surface_scan.py` |
-| L2 Syntax and register | Participial clauses, nominalisations, coordinated pairs, repeated POS templates, narrow sentence-length spread | `stylometry.py` |
-| L3 Probability | Fast-DetectGPT curvature, Binoculars, surprisal spread and shape | `lm_signals.py` |
-| L4 Embedding geometry | Intrinsic dimension, sentence trajectory, position in a reference bank, distance from the author's style | `embed_geometry.py` |
+| L1: Surface | Over-used vocabulary (669 sourced items), stock constructions, dash habits, chat residue | `surface_scan.py` |
+| L2: Syntax and register | Participial clauses, nominalisations, coordinated pairs, repeated POS templates, narrow sentence-length spread | `stylometry.py` |
+| L3: Probability | Fast-DetectGPT curvature, Binoculars, surprisal spread and shape | `lm_signals.py` |
+| L4: Embedding geometry | Intrinsic dimension, sentence trajectory, position in a reference bank, distance from the author's style | `embed_geometry.py` |
 | Paragraph structure | One-finding sentences at the same pace, no writer stance, summary closers, the same arc in every answer | `structure_scan.py` |
 
 Around these layers:
@@ -95,7 +97,7 @@ Restart the agent or open a new session after installing, then ask something lik
 
 ### 2. Install the Python toolkit
 
-Python 3.10 or newer (tested with 3.12). A GPU is used if present; CPU works.
+Python 3.10 or newer (tested with 3.12). A GPU is used if present, otherwise, CPU works.
 
 ```bash
 python -m venv .venv && source .venv/bin/activate      # or a conda environment
@@ -139,17 +141,6 @@ python $S/batch_compare.py rewrites/ --against ~/.deep-humanizer/profiles/blog/s
 ```
 
 Commercial adapters read their keys from environment variables (`GPTZERO_API_KEY`, `PANGRAM_API_KEY`, `ORIGINALITY_API_KEY`, `SAPLING_API_KEY`, `WINSTON_API_KEY`, `HIVE_API_KEY`, `COPYLEAKS_EMAIL` + `COPYLEAKS_API_KEY`, `ZEROGPT_API_KEY`). They follow each vendor's documentation as of November 2026 but have not been tested with live keys; inspect the raw output of the first call.
-
-## How well it works
-
-All numbers come from `skills/deep-humanizer/references/validation.md`.
-
-- **Detection.** On a matched bank of 120 human texts written before ChatGPT (arXiv abstracts, CNN news, Reddit stories) and 120 texts from four 2025-26 models, the combined local model separates human from AI text with a grouped cross-validated AUROC of 0.978. Stylometry is the strongest local layer (0.947) and surface vocabulary the weakest (0.78).
-- **Results that contradict 2023 findings.** Current models produce *higher* intrinsic dimension than human text (PHD 10.10 vs 9.70) and *more* varied vocabulary (MTLD 137 vs 98). The 2019 GPT-2 detector is at chance (AUROC 0.58).
-- **Editing.** On 30 held-out AI texts, an LLM editor following the skill for three passes lowered the median combined probability from 0.966 to 0.706. Surface and probability layers moved most; syntax barely moved. All 30 kept their meaning, and 2 of 30 reached CLEAN.
-- **A clean score is not the end.** In a later test, four short reflective texts scored CLEAN after sentence-level edits, while tropa-mini and ZeroGPT still called them AI. The remaining signal was in how the paragraphs were built. That case produced the paragraph-restructure pass, the structure scan and the rule that a disagreeing held-out detector overrides CLEAN.
-
-In short: the check round is a reliable instrument, and the editing workflow moves text a real distance. The last part of the gap needs the author's own sentences, examples and opinions, and the skill says so rather than forcing it.
 
 ## Tailor it to your writing style
 
@@ -257,10 +248,6 @@ Profiles, banks and caches contain your writing. By default they live in `~/.dee
 
 The skill improves prose; it does not obfuscate. It refuses character-level tricks (homoglyphs, zero-width characters, planted misspellings) and flags them when it finds them. It never adds facts, and it lists every statement about the author's own experience for the author to confirm. Many universities, journals and employers require disclosure of AI assistance. Editing a text so it reads well does not change what you have to disclose.
 
-## Models and data
-
-Models are downloaded from Hugging Face at first use, each under its own licence: Qwen/Qwen2.5-1.5B and -Instruct, FacebookAI/roberta-base, sentence-transformers/all-mpnet-base-v2, AnnaWegmann/Style-Embedding, cross-encoder/nli-deberta-v3-xsmall, tabularisai/ai-text-detection, desklib/ai-text-detector-v1.01, fakespot-ai/roberta-base-ai-text-detection-v1 and wasitaigeneratedcom/tropa-mini-ai-text-detector. Check the model cards before commercial use. The reference bank ships features and sentence embeddings only, not the source texts. `assets/ai_vocabulary.json` cites a source for every item.
-
-## Background
+## References
 
 The design rests on a literature review of embedding- and distribution-level detection, current detector tools, and humanization and evasion studies (Tulchinskii et al. 2023; Bao et al. 2024; Hans et al. 2024; Reinhart et al. 2025; Shaib et al. 2024; Kobak et al. 2025; Dugan et al. 2024, RAID; and others). The digest with verified arXiv identifiers is in `references/research_digest.md`; the full annotated bibliographies are in `references/literature/`. The skill was designed and validated with an AI agent (Claude, in Claude Science); `references/validation_code/` contains the experiment code.
